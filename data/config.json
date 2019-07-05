@@ -1,0 +1,22 @@
+{
+    "ws":"SFR-dd60",
+    "wp":"QLZSTSARZCXF",
+    "a":[
+        {
+            "desc":"lumiere sur pied avec deux lampes led",
+            "type":"onoff",
+            "vrb":["allumer", "eteindre"],
+            "obj":["lumiere", "lampe", "led"],
+            "loc":"chambre",
+            "adj":[]
+        },
+        {
+            "desc":"Température de la chambre",
+            "type":"read",
+            "vrb":["fai" , "lire", "afficher"],
+            "obj":["combien"],
+            "loc":"chambre",
+            "adj":[]
+        }
+    ]
+}
