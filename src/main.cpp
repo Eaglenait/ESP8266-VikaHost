@@ -15,7 +15,7 @@
 File fsUploadFile;
 ESP8266WebServer server(80);
 
-const int PIN   = 14;
+const int MAX_ACTIONS = 2;
 const int JSON_FILE_SIZE = 743;
 
 enum ActionType { Toggle, Analog, Measure, Unknown};
@@ -31,7 +31,7 @@ class VikaConfig {
 public:
   String wifiSSID;
   String wifiPassword;
-  Action actions[2];
+  Action actions[MAX_ACTIONS];
 };
 
 VikaConfig *config = new VikaConfig();
@@ -44,21 +44,7 @@ void handleNotFound()
 
 //Handles a pin request
 void handlePin() {
-  Serial.println("handeling ping");
-
-  File configJson = SPIFFS.open("/config.json", "r");
-  StaticJsonDocument<JSON_FILE_SIZE> jsonDoc;
-  DeserializationError error = deserializeJson(jsonDoc, configJson);
-  if (error) {
-    Serial.println("Error while parsing actions");
-  }
-
-  JsonArray actions = jsonDoc["a"].as<JsonArray>();
-  for(JsonVariant action : actions) {
-    String url = action["url"].as<String>();
-    Serial.println(url);
-  }
-
+  Serial.println("handeling pin");
   int action = -1;
 
   //handle url args
@@ -68,19 +54,51 @@ void handlePin() {
     Serial.println("ree: invalid request, not handleable");
     return;
   }
-  
-  switch (action)
-  {
-  default:
-  case 0:
-    /* Handle action 0 */
-    break;
-  
-  case -1:
-    return;
+
+  if(action >= 0 && action <= MAX_ACTIONS) {
+    int pin = config->actions[action].pin;
+    int state = config->actions[action].state;
+    ActionType type = config->actions[action].type;
+    String message = "{\"state\":\"";
+
+    switch (type) {
+    case Analog:
+      if(server.hasArg("v")) {
+        int newState = server.arg("v").toInt();
+        if(newState <= 255 && newState > 0) {
+          config->actions[action].state = newState;
+          analogWrite(pin, newState);
+        }
+      }
+      break;
+    case Toggle:
+      if(state == 0) {
+        analogWrite(pin, 255);
+        config->actions[action].state = 255;
+
+      } else {
+        analogWrite(pin, 0);
+        config->actions[action].state = 0;
+      }
+      break;
+
+    case Measure:
+      message += config->actions[action].state;
+      message += "\"}";
+      server.send(200, "text/html", message);
+      return;
+    case Unknown:
+    default:
+      break;
+    }
+
+    message += config->actions[action].state;
+    message += "\"}";
+    server.send(200, "text/html", message);
+
   }
 
-  server.send(200, "text/html", "pin handled");
+  server.send(404);
 }
 
 int validateConfig(File &f) {
@@ -201,6 +219,7 @@ short parseConfig() {
   for(size_t i = 0; i < actions.size(); i++) {
     config->actions[i].pin = actions[i]["pin"].as<int>();
     String type = actions[i]["type"].as<const char *>();
+
     if(type == "Toggle")
       config->actions[i].type = ActionType::Toggle;
     else if(type == "Measure")
@@ -292,9 +311,12 @@ void setup()
     case Unknown:
     case Analog:
     case Toggle:
+      //Hardware specific
       pinMode(pin, OUTPUT);
+      analogWrite(pin, 0);
       break;
     case Measure:
+      //Hardware specific
       pinMode(pin, INPUT);
       break;
     }
