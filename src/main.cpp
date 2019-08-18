@@ -15,23 +15,28 @@
 File fsUploadFile;
 ESP8266WebServer server(80);
 
-const int PIN   = 14;
-const int JSON_FILE_SIZE = 743;
+#define MAX_ACTIONS     2
+#define JSON_FILE_SIZE  743
+#define RED_PIN         15
+#define BLUE_PIN        12
+#define GREEN_PIN       13
 
-enum ActionType { Toggle, Analog, Measure, Unknown};
+enum ActionType { Toggle, Analog, Measure, Unknown };
 
-class Action {
+class Action
+{
 public:
-  ActionType type;  
+  ActionType type;
   int pin;
-  int state = 0;
+  int state;
 };
 
-class VikaConfig {
+class VikaConfig
+{
 public:
   String wifiSSID;
   String wifiPassword;
-  Action actions[2];
+  Action actions[MAX_ACTIONS];
 };
 
 VikaConfig *config = new VikaConfig();
@@ -43,50 +48,103 @@ void handleNotFound()
 }
 
 //Handles a pin request
-void handlePin() {
-  Serial.println("handeling ping");
-
-  File configJson = SPIFFS.open("/config.json", "r");
-  StaticJsonDocument<JSON_FILE_SIZE> jsonDoc;
-  DeserializationError error = deserializeJson(jsonDoc, configJson);
-  if (error) {
-    Serial.println("Error while parsing actions");
-  }
-
-  JsonArray actions = jsonDoc["a"].as<JsonArray>();
-  for(JsonVariant action : actions) {
-    String url = action["url"].as<String>();
-    Serial.println(url);
-  }
+void handlePin()
+{
+  Serial.println("handeling pin");
 
   int action = -1;
 
+  Serial.println("");
+
   //handle url args
-  if(server.hasArg("a")) { 
+  if (server.hasArg("a"))
+  {
     action = server.arg("a").toInt();
-  } else {  
+  }
+  else
+  {
     Serial.println("ree: invalid request, not handleable");
     return;
   }
-  
-  switch (action)
+
+  String reply = "{\"value\":";
+  if (action >= 0 && action <= MAX_ACTIONS)
   {
-  default:
-  case 0:
-    /* Handle action 0 */
-    break;
-  
-  case -1:
-    return;
+    int state = config->actions[action].state;
+    int pin   = config->actions[action].pin;
+
+    switch (config->actions[action].type)
+    {
+    case Toggle:
+      if (server.method() == HTTP_POST)
+      {
+        if (state == 0)
+        {
+          digitalWrite(pin, HIGH);
+          config->actions[action].state = 255;
+          reply += "255}";
+        }
+        else
+        {
+          digitalWrite(pin, LOW);
+          config->actions[action].state = 0;
+          reply += "0}";
+        }
+      }
+      else if (server.method() == HTTP_GET)
+      {
+        reply += state;
+        reply += '}';
+      }
+      break;
+
+    case Analog:
+      if (server.method() == HTTP_POST)
+      {
+        if (server.hasArg("v"))
+        {
+          uint value = server.arg("v").toInt();
+          if (value > 0 || value < 255)
+          {
+            analogWrite(pin, value);
+            reply += value;
+            reply += '}';
+          }
+          else
+          {
+            server.send(400, "text/plain", "bad argument in request");
+          }
+        }
+        else
+        {
+          server.send(400, "text/plain", "value argument missing in request");
+        }
+      }
+      else if (server.method() == HTTP_GET)
+      {
+            reply += state;
+            reply += '}';
+      }
+      break;
+
+    default:
+    case Measure:
+    case Unknown:
+      reply += state;
+      reply += '}';
+      break;
+    }
   }
 
-  server.send(200, "text/html", "pin handled");
+  server.send(200, "application/json", reply);
 }
 
-int validateConfig(File &f) {
+int validateConfig(File &f)
+{
   StaticJsonDocument<JSON_FILE_SIZE> jsonDoc;
   DeserializationError error = deserializeJson(jsonDoc, f);
-  if (error) {
+  if (error)
+  {
     Serial.println("validation config : Error while parsing actions");
     return 1;
   }
@@ -94,13 +152,15 @@ int validateConfig(File &f) {
   String ssid = jsonDoc["ws"].as<String>();
   String password = jsonDoc["wp"].as<String>();
 
-  if(ssid || password) {
+  if (ssid || password)
+  {
     Serial.println("validation config: wifi or password missing");
     return 2;
   }
 
   JsonArray actions = jsonDoc["a"].as<JsonArray>();
-  if(actions.size() <= 0) {
+  if (actions.size() <= 0)
+  {
     Serial.println("validation config: no actions");
     return 3;
   }
@@ -110,21 +170,24 @@ int validateConfig(File &f) {
   return 0;
 }
 
-void handleFileUpload() {
-  if(server.method() != HTTPMethod::HTTP_POST) {
+void handleFileUpload()
+{
+  if (server.method() != HTTPMethod::HTTP_POST)
+  {
     server.send(400, "text/plain", "only post");
     return;
   }
-  
+
   Serial.println("on file upload");
 
-  server.send(200,"text/plain", "handling");
+  server.send(200, "text/plain", "handling");
   delay(100);
 
   HTTPUpload &upload = server.upload();
   File f;
 
-  if (upload.status == UPLOAD_FILE_START) {
+  if (upload.status == UPLOAD_FILE_START)
+  {
     Serial.println("upload file start");
     f.read(upload.buf, upload.currentSize);
 
@@ -145,46 +208,54 @@ void handleFileUpload() {
       return;
     }
   }
-  else if (upload.status == UPLOAD_FILE_WRITE) {
+  else if (upload.status == UPLOAD_FILE_WRITE)
+  {
     Serial.println("upload file write");
-    if (fsUploadFile) {
+    if (fsUploadFile)
+    {
       fsUploadFile = SPIFFS.open("/config.json", "w");
-      
+
       size_t written = fsUploadFile.write(upload.buf, upload.currentSize); // Write the received bytes to the file
       Serial.println("config written " + written);
     }
   }
-  else if (upload.status == UPLOAD_FILE_END) {
+  else if (upload.status == UPLOAD_FILE_END)
+  {
     Serial.println("upload file end");
-    if (fsUploadFile) {     // If the file was successfully created
+    if (fsUploadFile)
+    {                       // If the file was successfully created
       fsUploadFile.close(); // Close the file again
       Serial.print("handleFileUpload Size: ");
       Serial.println(upload.totalSize);
       server.send(303);
     }
-    else {
+    else
+    {
       server.send(500, "text/plain", "500: couldn't create file");
     }
   }
 }
 
-short parseConfig() {
-  if (!SPIFFS.exists("/config.json")) {
+short parseConfig()
+{
+  if (!SPIFFS.exists("/config.json"))
+  {
     Serial.println("config.json does not exists");
     return 3;
-  } else {
-    Serial.println("json config found");
   }
 
   File configJson = SPIFFS.open("/config.json", "r");
   StaticJsonDocument<JSON_FILE_SIZE> jsonDoc;
   DeserializationError error = deserializeJson(jsonDoc, configJson);
 
-  if(error) {
+  if (error)
+  {
     Serial.println("ERROR: bad config or deserialization error:");
     Serial.println(error.c_str());
     return 3;
-  } else {
+  }
+  else
+  {
     Serial.println("config parsed");
   }
 
@@ -194,18 +265,21 @@ short parseConfig() {
   config->wifiPassword = wp;
 
   JsonArray actions = jsonDoc["a"].as<JsonArray>();
-  if(actions.isNull()) {
+  if (actions.isNull())
+  {
     return 2;
-  } 
+  }
 
-  for(size_t i = 0; i < actions.size(); i++) {
+  Serial.println("actions found : " + actions.size());
+  for (size_t i = 0; i < actions.size(); i++)
+  {
     config->actions[i].pin = actions[i]["pin"].as<int>();
     String type = actions[i]["type"].as<const char *>();
-    if(type == "Toggle")
+    if (type == "Toggle")
       config->actions[i].type = ActionType::Toggle;
-    else if(type == "Measure")
+    else if (type == "Measure")
       config->actions[i].type = ActionType::Measure;
-    else if(type == "Analog")
+    else if (type == "Analog")
       config->actions[i].type = ActionType::Analog;
     else
       config->actions[i].type = ActionType::Unknown;
@@ -214,17 +288,19 @@ short parseConfig() {
   return 0;
 }
 
-void handleRoot() {
+void handleRoot()
+{
   Serial.println("on root");
   File file = SPIFFS.open("/root.html", "r");
   server.streamFile(file, "text/html");
 }
 
-void StartAsAP() {
+void StartAsAP()
+{
   //Access point configuration
   IPAddress apAddress = IPAddress(192, 168, 0, 1);
   IPAddress apGateWay = IPAddress(192, 168, 0, 1);
-  IPAddress apMask    = IPAddress(255, 255, 255, 0);
+  IPAddress apMask = IPAddress(255, 255, 255, 0);
 
   //start in AP mode
   WiFi.mode(WIFI_AP);
@@ -235,8 +311,9 @@ void StartAsAP() {
   Serial.println(WiFi.localIP());
 }
 
-void StartAsClient() {
-  String ssid     = config->wifiSSID;
+void StartAsClient()
+{
+  String ssid = config->wifiSSID;
   String password = config->wifiPassword;
 
   Serial.println("Starting WiFi connection with: ");
@@ -248,12 +325,13 @@ void StartAsClient() {
   WiFi.begin(ssid, password);
 
   int wifiTimeOut = 0;
-  while (WiFi.status() != WL_CONNECTED && wifiTimeOut != 500) { 
+  while (WiFi.status() != WL_CONNECTED && wifiTimeOut != 500)
+  {
     delay(20);
     Serial.print(".");
     wifiTimeOut++;
   }
-    
+
   Serial.println("Started as client");
   Serial.print("wifi connected with ip ");
   Serial.println(WiFi.localIP().toString());
@@ -264,8 +342,10 @@ void setup()
   Serial.begin(115200);
   SPIFFS.begin();
 
+  //parse config into memory
   short parseResult = parseConfig();
-  switch(parseResult) {
+  switch (parseResult)
+  {
   case 0:
     Serial.println("returns 0");
     StartAsClient();
@@ -275,24 +355,28 @@ void setup()
     StartAsAP();
     break;
   case 2:
-    while (true) {
+    while (true)
+    {
       Serial.println("bad config");
       delay(1000);
     }
     break;
   }
 
-  //Will try to connect to given SSID, on failure starts as Access Point
   size_t actions = sizeof(config->actions) / sizeof(config->actions[0]);
-  for(size_t i = 0; i < actions; i++) {
+  for (size_t i = 0; i < actions; i++)
+  {
     int pin = config->actions[i].pin;
     ActionType type = config->actions[i].type;
 
-    switch(type) {
+    //setup pins
+    switch (type)
+    {
     case Unknown:
     case Analog:
     case Toggle:
       pinMode(pin, OUTPUT);
+      digitalWrite(pin, LOW);
       break;
     case Measure:
       pinMode(pin, INPUT);
@@ -300,9 +384,19 @@ void setup()
     }
   }
 
+  //useless pins
+  pinMode(RED_PIN, OUTPUT);
+  pinMode(BLUE_PIN, OUTPUT);
+  pinMode(GREEN_PIN, OUTPUT);
+
+  digitalWrite(RED_PIN, LOW);
+  digitalWrite(GREEN_PIN, LOW);
+  digitalWrite(BLUE_PIN, LOW);
+
+  //http server config
   server.on("/", handleNotFound);
   server.on("/handlePin", handlePin);
-  server.on("/upload", HTTPMethod::HTTP_POST, [](){server.send(200);}, handleFileUpload);
+  server.on("/upload", HTTPMethod::HTTP_POST, []() { server.send(200); }, handleFileUpload);
   server.onFileUpload(handleFileUpload);
   server.onNotFound(handleNotFound);
 
@@ -310,14 +404,16 @@ void setup()
 
   server.begin();
 
-  if(!MDNS.begin("esp-" + WiFi.localIP().toString())) {
+  if (!MDNS.begin("esp-" + WiFi.localIP().toString()))
+  {
     Serial.println("Error setting up mDNS responder");
   }
   MDNS.addService("vika", "tcp", 4545);
 }
 
-void loop() {
+void loop()
+{
   server.handleClient();
   delay(50);
   MDNS.update();
- }
+}
