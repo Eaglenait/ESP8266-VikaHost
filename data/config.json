@@ -6,19 +6,10 @@
 			"desc":"Lumiere sur pied avec deux lampes led",
 			"type":"Toggle",
 			"vrb":["allumer","eteindre"],
-			"obj":["lumiere","lampe","led"],
-			"loc":"chambre",
-			"adj":["pied","principale"],
-			"pin":14
-		},
-		{
-			"desc":"Température de la chambre",
-			"type":"Measure",
-			"vrb":["fai","lire","afficher"],
-			"obj":["combien"],
-			"loc":"chambre",
+			"obj":[],
 			"adj":[],
-			"pin":9
+			"loc":"chambre",
+			"pin":4
 		}
 	]
 }
