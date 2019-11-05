@@ -21,6 +21,11 @@ ESP8266WebServer server(80);
 #define BLUE_PIN        12
 #define GREEN_PIN       13
 
+//New vars
+//  Sleep time
+//  Deep sleep hour 
+//  Deep sleep duration
+
 enum ActionType { Toggle, Analog, Measure, Unknown };
 
 class Action
@@ -415,6 +420,17 @@ void setup()
 
 void loop()
 {
+  //powerstate
+  //
+  //wait n min in light sleep
+  //wake up - wait n min
+  //poll date
+  //if date close to night -> go into deep sleep for night duration
+  //                          should be configurable 
+  //else complete wait
+  //prepare deepsleep (clean sleep)
+  //what req has to be sent to be considered network alive
+
   server.handleClient();
   delay(50);
   MDNS.update();
