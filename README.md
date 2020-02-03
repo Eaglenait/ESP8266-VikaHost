@@ -16,7 +16,7 @@ Quoi ça sert
 
 -mdns service discovery (defaultname esp-currentip)
 
-                        (default service vika tcp:4545)
+(default service vika tcp:4545)
 
 Urls:
 
@@ -24,25 +24,29 @@ Urls:
 
   returns the json config to be parsed by your client
   
+  --
+  
 /handlePin?a=0 -> POST  -> will toggle the pin (if toggle type)
 
 /handlePin?a=0&v=255 -> POST -> Will set the pin to the value v (if analog type) 
 
   will try to handle the action you pass as arg (here action 0)
   
-   actions are in the config file
+  actions are in the config file
 
-answer json
+  answer json
 
   {"value":"val"}
 
   Reads value of pin after setting it
   
+  --
 
 /handlePin?a=0 -> GET
 
   returns pin state as json : {"value":"val"}
   
+  --
 
 Config JSON
 
@@ -58,7 +62,7 @@ each actions has
   
   type = type of signal that is awaited
   
-          can be analog (accepts 0-255 value) or Toggle (on off)
+  can be Analog (accepts 0-255 value) or Toggle (on off)
         
   (optional config that can be parsed in other clients)
   
@@ -69,6 +73,8 @@ each actions has
   loc = localisation
   
   pin = what pin on the esp to drive (and autoconfigure)
+  
+  --
   
 Max number of actions is defined in 
 https://github.com/Eaglenait/ESP8266-VikaHost/blob/c241fee319308037770e286fe534e402c5968103/src/main.cpp#L18
